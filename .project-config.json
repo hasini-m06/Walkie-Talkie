@@ -1,0 +1,11 @@
+{
+  "build_command": "pnpm run build",
+  "capabilities": [],
+  "dev_command": "pnpm run dev",
+  "env_vars": {},
+  "experiments": null,
+  "name": "Walkie-Talkie",
+  "port": 3000,
+  "template_id": "web-static",
+  "test_command": "pnpm test"
+}
