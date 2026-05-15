@@ -1,89 +1,146 @@
 /*
  * TDL-9 MISSION CONTROL — Technical Documentation Panel
  * Design: Obsidian Tactical Grid
- * Shows Firebase JSON schema, bridge.py snippet, and Arduino serial format
+ * Tabs: Supabase schema | bridge.py | Arduino serial format | Circuit diagram
  */
 import { useState } from "react";
 
-type Tab = "firebase" | "bridge" | "arduino";
+type Tab = "supabase" | "bridge" | "arduino" | "circuit";
 
-const FIREBASE_SCHEMA = `// Firebase RTDB — tactical_log schema
-{
-  "tactical_log": {
-    "-NxABC123": {
-      "timestamp": "2026-05-15T06:55:38.000Z",
-      "origin":    "T9-A",
-      "action":    "TX",
-      "text":      "SOS",
-      "morse":     "...---...",
-      "seq":       7
-    }
-  }
-}`;
+const SUPABASE_SCHEMA = `-- Supabase (Postgres) — tactical_log table
+create table tactical_log (
+  id           uuid primary key default gen_random_uuid(),
+  created_at   timestamptz default now(),
+  origin       text not null,   -- 'T9-A' or 'T9-B'
+  action       text not null,   -- 'TX' or 'RX'
+  decoded_text text not null,
+  morse_code   text not null,
+  is_sos       boolean default false,
+  seq_num      integer
+);
 
-const BRIDGE_PY = `# bridge.py — Datalink Bridge
-import serial, re, json, time
-import firebase_admin
-from firebase_admin import credentials, db
+-- node_status table
+create table node_status (
+  id         text primary key,  -- 'T9-A' or 'T9-B'
+  online     boolean default false,
+  last_seen  timestamptz,
+  tx_count   integer default 0,
+  rx_count   integer default 0
+);
 
-cred = credentials.Certificate("serviceAccount.json")
-firebase_admin.initialize_app(cred, {
-    "databaseURL": "https://<project>.firebaseio.com"
-})
-ref = db.reference("tactical_log")
+-- Enable Realtime on both tables
+alter publication supabase_realtime
+  add table tactical_log, node_status;`;
 
-PATTERN = re.compile(
-    r"\\[([^|]+)\\|([^|]+)\\|([^|]+)\\|([^\\]]+)\\]"
-)
+const BRIDGE_PY = `# bridge.py — Serial → Supabase Datalink Bridge
+# Reads JSON lines from COM13 (T9-A) and COM3 (T9-B)
+# Pushes rows to Supabase tactical_log via REST API
 
-with serial.Serial("/dev/ttyUSB0", 9600) as ser:
-    seq = 0
-    while True:
-        line = ser.readline().decode().strip()
-        m = PATTERN.match(line)
-        if m:
-            node, action, text, morse = m.groups()
+import serial, json, time
+from supabase import create_client
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+sb = create_client(os.getenv("SUPABASE_URL"),
+                   os.getenv("SUPABASE_SERVICE_KEY"))
+
+PORTS = {"T9-A": "COM13", "T9-B": "COM3"}
+BAUD  = 9600
+
+def handle_line(node_id: str, line: str, seq: int):
+    try:
+        d = json.loads(line.strip())
+        sb.table("tactical_log").insert({
+            "origin":       node_id,
+            "action":       d["action"],   # TX or RX
+            "decoded_text": d["text"],
+            "morse_code":   d["morse"],
+            "is_sos":       d.get("sos", False),
+            "seq_num":      seq,
+        }).execute()
+    except Exception as e:
+        print(f"[{node_id}] parse error: {e}")
+
+# Open both ports and read in round-robin
+serials = {nid: serial.Serial(port, BAUD, timeout=0.1)
+           for nid, port in PORTS.items()}
+seq = 0
+while True:
+    for nid, ser in serials.items():
+        line = ser.readline().decode(errors="ignore")
+        if line.strip():
             seq += 1
-            ref.push({
-                "timestamp": time.strftime(
-                    "%Y-%m-%dT%H:%M:%SZ",
-                    time.gmtime()
-                ),
-                "origin": node,
-                "action": action,
-                "text": text,
-                "morse": morse,
-                "seq": seq
-            })`;
+            handle_line(nid, line, seq)`;
 
-const ARDUINO_FMT = `// Arduino Serial Output Format
-// Node A sends letter 'V':
-[T9A|SENT|V|...-]
+const ARDUINO_FMT = `// Arduino Serial Output Format (JSON lines)
+// Each Arduino prints one JSON object per event:
 
-// Node A received 'SOS':
-[T9A|RCVD|SOS|...---...]
+// Node T9-A transmits letter 'V':
+{"action":"TX","text":"V","morse":"...-","sos":false}
 
-// Node B sends 'OK':
-[T9B|SENT|OK|--- -.-]
+// Node T9-B receives 'SOS':
+{"action":"RX","text":"SOS","morse":"...---...","sos":true}
 
-// C++ snippet (Node A):
-void sendMorse(char letter, String morse) {
-  Serial.print("[T9A|SENT|");
-  Serial.print(letter);
-  Serial.print("|");
+// C++ snippet — paste in both sketches:
+void serialReport(const char* action,
+                  const char* text,
+                  const char* morse,
+                  bool sos) {
+  Serial.print("{\"action\":\"");
+  Serial.print(action);          // "TX" or "RX"
+  Serial.print("\",\"text\":\"");
+  Serial.print(text);
+  Serial.print("\",\"morse\":\"");
   Serial.print(morse);
-  Serial.println("]");
+  Serial.print("\",\"sos\":");
+  Serial.print(sos ? "true" : "false");
+  Serial.println("}");
 }`;
+
+const CIRCUIT = `NRF24L01+ → Arduino Nano Wiring
+(same pinout for both T9-A and T9-B)
+
+NRF24L01  │ Arduino Nano
+──────────┼──────────────
+VCC       │ 3.3V  (NOT 5V!)
+GND       │ GND
+CE        │ D9
+CSN       │ D10
+SCK       │ D13  (SPI CLK)
+MOSI      │ D11  (SPI MOSI)
+MISO      │ D12  (SPI MISO)
+IRQ       │ (not connected)
+
+OLED SSD1306 (I2C):
+VCC  → 3.3V / 5V
+GND  → GND
+SCL  → A5
+SDA  → A4
+
+Buzzer (passive):
+(+) → D6 (PWM)  via 100Ω resistor
+(-) → GND
+
+Note: Add 100µF cap across NRF24L01
+VCC/GND to stabilise 3.3V rail.`;
+
+const CONTENT: Record<Tab, string> = {
+  supabase: SUPABASE_SCHEMA,
+  bridge: BRIDGE_PY,
+  arduino: ARDUINO_FMT,
+  circuit: CIRCUIT,
+};
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "supabase", label: "Supabase" },
+  { id: "bridge", label: "Bridge.py" },
+  { id: "arduino", label: "Arduino" },
+  { id: "circuit", label: "Circuit" },
+];
 
 export function TechDocsPanel() {
-  const [tab, setTab] = useState<Tab>("firebase");
-
-  const content =
-    tab === "firebase"
-      ? FIREBASE_SCHEMA
-      : tab === "bridge"
-      ? BRIDGE_PY
-      : ARDUINO_FMT;
+  const [tab, setTab] = useState<Tab>("supabase");
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     fontFamily: "'Space Grotesk', sans-serif",
@@ -123,19 +180,12 @@ export function TechDocsPanel() {
       </div>
 
       {/* Tabs */}
-      <div
-        className="flex"
-        style={{ borderBottom: "1px solid #1A1A1A", marginBottom: 8 }}
-      >
-        <button style={tabStyle(tab === "firebase")} onClick={() => setTab("firebase")}>
-          Firebase
-        </button>
-        <button style={tabStyle(tab === "bridge")} onClick={() => setTab("bridge")}>
-          Bridge.py
-        </button>
-        <button style={tabStyle(tab === "arduino")} onClick={() => setTab("arduino")}>
-          Arduino
-        </button>
+      <div className="flex" style={{ borderBottom: "1px solid #1A1A1A", marginBottom: 8 }}>
+        {TABS.map((t) => (
+          <button key={t.id} style={tabStyle(tab === t.id)} onClick={() => setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {/* Code block */}
@@ -153,13 +203,13 @@ export function TechDocsPanel() {
           style={{
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: "10px",
-            color: "#6B7280",
+            color: tab === "circuit" ? "#4ADE80" : "#6B7280",
             margin: 0,
             lineHeight: 1.6,
             whiteSpace: "pre",
           }}
         >
-          {content}
+          {CONTENT[tab]}
         </pre>
       </div>
     </div>

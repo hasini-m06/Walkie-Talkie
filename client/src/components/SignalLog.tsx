@@ -7,6 +7,8 @@
 import { TacticalLogEntry } from "@/lib/tacticalData";
 import { useEffect, useRef, useState } from "react";
 
+type Filter = "ALL" | "TX" | "RX" | "SOS";
+
 interface SignalLogProps {
   log: TacticalLogEntry[];
 }
@@ -196,16 +198,21 @@ export function SignalLog({ log }: SignalLogProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(log.length);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<Filter>("ALL");
+
+  const filtered = log.filter((e) => {
+    if (filter === "TX") return e.action === "TX";
+    if (filter === "RX") return e.action === "RX";
+    if (filter === "SOS") return e.isSOS;
+    return true;
+  });
 
   useEffect(() => {
     if (log.length > prevLengthRef.current) {
       const added = log.slice(0, log.length - prevLengthRef.current);
       setNewIds(new Set(added.map((e) => e.id)));
       prevLengthRef.current = log.length;
-      // Scroll to top (newest entries are at top)
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = 0;
-      }
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
     }
   }, [log]);
 
@@ -254,45 +261,39 @@ export function SignalLog({ log }: SignalLogProps) {
           INTEGRATED SIGNAL LOG
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <div style={{ width: 6, height: 6, backgroundColor: "#4ADE80", borderRadius: "50%" }} />
-            <span
+          {/* Filter buttons */}
+          {(["ALL", "TX", "RX", "SOS"] as Filter[]).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
               style={{
                 fontFamily: "'Space Grotesk', sans-serif",
                 fontSize: "9px",
-                color: "#6B7280",
                 letterSpacing: "0.08em",
+                fontWeight: 700,
+                color:
+                  filter === f
+                    ? f === "SOS"
+                      ? "#EF4444"
+                      : f === "TX"
+                      ? "#4ADE80"
+                      : f === "RX"
+                      ? "#FBBF24"
+                      : "#E5E5E5"
+                    : "#4B5563",
+                backgroundColor: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "2px 4px",
+                borderBottom:
+                  filter === f
+                    ? `1px solid ${f === "SOS" ? "#EF4444" : f === "TX" ? "#4ADE80" : f === "RX" ? "#FBBF24" : "#E5E5E5"}`
+                    : "1px solid transparent",
               }}
             >
-              TX
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div style={{ width: 6, height: 6, backgroundColor: "#FBBF24", borderRadius: "50%" }} />
-            <span
-              style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontSize: "9px",
-                color: "#6B7280",
-                letterSpacing: "0.08em",
-              }}
-            >
-              RX
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div style={{ width: 6, height: 6, backgroundColor: "#EF4444", borderRadius: "50%" }} />
-            <span
-              style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontSize: "9px",
-                color: "#6B7280",
-                letterSpacing: "0.08em",
-              }}
-            >
-              SOS
-            </span>
-          </div>
+              {f === "RX" ? "RX HIST" : f}
+            </button>
+          ))}
           <div
             style={{
               fontFamily: "'JetBrains Mono', monospace",
@@ -302,7 +303,7 @@ export function SignalLog({ log }: SignalLogProps) {
               padding: "1px 6px",
             }}
           >
-            {log.length} ENTRIES
+            {filtered.length} ENTRIES
           </div>
         </div>
       </div>
@@ -321,7 +322,7 @@ export function SignalLog({ log }: SignalLogProps) {
             </tr>
           </thead>
           <tbody>
-            {log.map((entry, idx) => (
+            {filtered.map((entry, idx) => (
               <LogRow
                 key={entry.id}
                 entry={entry}
@@ -332,7 +333,7 @@ export function SignalLog({ log }: SignalLogProps) {
           </tbody>
         </table>
 
-        {log.length === 0 && (
+        {filtered.length === 0 && (
           <div
             className="flex items-center justify-center"
             style={{ height: 200 }}

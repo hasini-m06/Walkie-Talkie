@@ -1,10 +1,10 @@
 /*
  * TDL-9 MISSION CONTROL — Node Telemetry Panel
  * Design: Obsidian Tactical Grid
- * Shows node status, crypto, latency, mode, TX/RX counts, and pulse indicators
- * Font: Space Grotesk (labels), JetBrains Mono (values)
+ * Shows node status, crypto, latency, mode, TX/RX counts, signal quality bars, buzzer indicator
  */
 import { NodeStatus } from "@/lib/tacticalData";
+import { Volume2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 interface NodePanelProps {
@@ -36,6 +36,27 @@ function PulseRing({ active }: { active: boolean }) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function SignalBars({ quality }: { quality: number }) {
+  const bars = 5;
+  const activeBars = Math.round((quality / 100) * bars);
+  const color = quality > 75 ? "#4ADE80" : quality > 50 ? "#FBBF24" : "#EF4444";
+  return (
+    <div className="flex items-end gap-px" style={{ height: 14 }}>
+      {Array.from({ length: bars }, (_, i) => (
+        <div
+          key={i}
+          style={{
+            width: 4,
+            height: 4 + i * 2,
+            backgroundColor: i < activeBars ? color : "#1E1E1E",
+            transition: "background-color 600ms ease-out",
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -76,15 +97,8 @@ export function NodePanel({ node }: NodePanelProps) {
     color: "#A3A3A3",
   };
 
-  const activeValueStyle: React.CSSProperties = {
-    ...valueStyle,
-    color: "#4ADE80",
-  };
-
-  const sosValueStyle: React.CSSProperties = {
-    ...valueStyle,
-    color: "#EF4444",
-  };
+  const activeValueStyle: React.CSSProperties = { ...valueStyle, color: "#4ADE80" };
+  const sosValueStyle: React.CSSProperties = { ...valueStyle, color: "#EF4444" };
 
   return (
     <div
@@ -113,18 +127,44 @@ export function NodePanel({ node }: NodePanelProps) {
             {node.label}
           </span>
         </div>
-        <div
-          style={{
-            fontFamily: "'Space Grotesk', sans-serif",
-            fontSize: "9px",
-            letterSpacing: "0.1em",
-            fontWeight: 600,
-            color: node.online ? "#4ADE80" : "#EF4444",
-            border: `1px solid ${node.online ? "#4ADE80" : "#EF4444"}`,
-            padding: "1px 6px",
-          }}
-        >
-          {node.online ? "ONLINE" : "OFFLINE"}
+        <div className="flex items-center gap-2">
+          {/* Buzzer indicator */}
+          {node.buzzerActive && (
+            <div
+              className="flex items-center gap-1"
+              style={{
+                backgroundColor: "rgba(251,191,36,0.1)",
+                border: "1px solid rgba(251,191,36,0.4)",
+                padding: "1px 5px",
+              }}
+            >
+              <Volume2 size={9} style={{ color: "#FBBF24" }} />
+              <span
+                style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontSize: "8px",
+                  color: "#FBBF24",
+                  letterSpacing: "0.1em",
+                  fontWeight: 700,
+                }}
+              >
+                BUZZ
+              </span>
+            </div>
+          )}
+          <div
+            style={{
+              fontFamily: "'Space Grotesk', sans-serif",
+              fontSize: "9px",
+              letterSpacing: "0.1em",
+              fontWeight: 600,
+              color: node.online ? "#4ADE80" : "#EF4444",
+              border: `1px solid ${node.online ? "#4ADE80" : "#EF4444"}`,
+              padding: "1px 6px",
+            }}
+          >
+            {node.online ? "ONLINE" : "OFFLINE"}
+          </div>
         </div>
       </div>
 
@@ -153,12 +193,33 @@ export function NodePanel({ node }: NodePanelProps) {
           <span style={labelStyle}>Channel</span>
           <span style={valueStyle}>CH90</span>
         </div>
+        {/* Signal quality */}
+        <div className="flex items-center justify-between">
+          <span style={labelStyle}>Signal</span>
+          <div className="flex items-center gap-2">
+            <span
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: "11px",
+                color:
+                  node.signalQuality > 75
+                    ? "#4ADE80"
+                    : node.signalQuality > 50
+                    ? "#FBBF24"
+                    : "#EF4444",
+              }}
+            >
+              {Math.round(node.signalQuality)}%
+            </span>
+            <SignalBars quality={node.signalQuality} />
+          </div>
+        </div>
       </div>
 
       {/* Separator */}
       <div style={{ height: 1, backgroundColor: "#1A1A1A", margin: "10px 0" }} />
 
-      {/* TX / RX counters and pulse badges */}
+      {/* TX / RX counters */}
       <div className="flex items-center gap-2">
         <div
           className="flex-1 flex flex-col items-center py-2"

@@ -30,6 +30,8 @@ export interface NodeStatus {
   rxCount: number;
   currentAction: ActionType | null;
   pulseKey: number; // increment to re-trigger animation
+  signalQuality: number; // 0–100 simulated RSSI percentage
+  buzzerActive: boolean; // true when buzzer is currently firing
 }
 
 // Morse code lookup table

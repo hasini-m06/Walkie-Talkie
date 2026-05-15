@@ -51,7 +51,7 @@ export function SystemStatsPanel({ log, nodes }: SystemStatsPanelProps) {
     { layer: "L2 TRN", value: "NRF24L01 + ACK" },
     { layer: "L3 APP", value: "Serial JSON" },
     { layer: "L4 DLK", value: "Python Bridge" },
-    { layer: "L5 UI", value: "React / Firebase" },
+    { layer: "L5 UI", value: "React / Supabase" },
   ];
 
   return (

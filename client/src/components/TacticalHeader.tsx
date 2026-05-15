@@ -9,9 +9,10 @@ import { Shield, Wifi } from "lucide-react";
 
 interface TacticalHeaderProps {
   sosAlert: boolean;
+  connectionMode?: "LIVE" | "SIMULATED";
 }
 
-export function TacticalHeader({ sosAlert }: TacticalHeaderProps) {
+export function TacticalHeader({ sosAlert, connectionMode = "SIMULATED" }: TacticalHeaderProps) {
   const time = useUTCClock();
 
   return (
@@ -76,17 +77,20 @@ export function TacticalHeader({ sosAlert }: TacticalHeaderProps) {
       {/* Right: Classification + Clock */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <Wifi size={12} style={{ color: "#4ADE80" }} />
+          <Wifi
+            size={12}
+            style={{ color: connectionMode === "LIVE" ? "#4ADE80" : "#FBBF24" }}
+          />
           <span
             style={{
               fontFamily: "'Space Grotesk', sans-serif",
-              color: "#4ADE80",
+              color: connectionMode === "LIVE" ? "#4ADE80" : "#FBBF24",
               fontSize: "10px",
               letterSpacing: "0.1em",
               fontWeight: 600,
             }}
           >
-            LINK ACTIVE
+            {connectionMode === "LIVE" ? "LINK ACTIVE" : "SIMULATED"}
           </span>
         </div>
         <div

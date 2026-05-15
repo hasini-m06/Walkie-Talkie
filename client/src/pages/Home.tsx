@@ -8,6 +8,8 @@
 import { LinkTopology } from "@/components/LinkTopology";
 import { MorseEncoder } from "@/components/MorseEncoder";
 import { NodePanel } from "@/components/NodePanel";
+import { OLEDMirrorPanel } from "@/components/OLEDMirrorPanel";
+import { SendMessagePanel } from "@/components/SendMessagePanel";
 import { SignalLog } from "@/components/SignalLog";
 import { SystemStatsPanel } from "@/components/SystemStatsPanel";
 import { TacticalHeader } from "@/components/TacticalHeader";
@@ -15,7 +17,7 @@ import { TechDocsPanel } from "@/components/TechDocsPanel";
 import { useTacticalSimulation } from "@/hooks/useTacticalSimulation";
 
 export default function Home() {
-  const { log, nodes, sosAlert } = useTacticalSimulation();
+  const { log, nodes, sosAlert, sendMessage } = useTacticalSimulation();
 
   return (
     <div
@@ -27,8 +29,8 @@ export default function Home() {
         flexDirection: "column",
       }}
     >
-      {/* Fixed header */}
-      <TacticalHeader sosAlert={sosAlert} />
+      {/* Fixed header — connectionMode="SIMULATED" until hardware bridge is live */}
+      <TacticalHeader sosAlert={sosAlert} connectionMode="SIMULATED" />
 
       {/* Main content area — offset by header height */}
       <div
@@ -42,7 +44,7 @@ export default function Home() {
         {/* Left column — Telemetry */}
         <div
           style={{
-            width: 280,
+            width: 300,
             flexShrink: 0,
             borderRight: "1px solid #262626",
             overflowY: "auto",
@@ -77,8 +79,9 @@ export default function Home() {
             </span>
           </div>
 
-          {/* Node panels */}
+          {/* All left-column panels */}
           <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* Node panels */}
             {nodes.map((node) => (
               <NodePanel key={node.id} node={node} />
             ))}
@@ -86,10 +89,16 @@ export default function Home() {
             {/* Link topology */}
             <LinkTopology nodes={nodes} />
 
+            {/* OLED mirror — shows what the physical display on T9-B shows */}
+            <OLEDMirrorPanel log={log} />
+
             {/* System stats */}
             <SystemStatsPanel log={log} nodes={nodes} />
 
-            {/* Morse encoder */}
+            {/* Send message — interactive transmit panel */}
+            <SendMessagePanel onSend={sendMessage} />
+
+            {/* Morse reference */}
             <MorseEncoder />
 
             {/* Tech reference docs */}
@@ -132,7 +141,7 @@ export default function Home() {
                 { label: "TRANSPORT", value: "NRF24L01 + Auto-ACK" },
                 { label: "APPLICATION", value: "Serial JSON" },
                 { label: "DATALINK", value: "Python Bridge" },
-                { label: "PRESENTATION", value: "React / Firebase RTDB" },
+                { label: "PRESENTATION", value: "React / Supabase" },
               ].map((item) => (
                 <div key={item.label} className="flex items-center gap-1.5">
                   <span
